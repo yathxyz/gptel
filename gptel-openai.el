@@ -312,7 +312,7 @@ Mutate state INFO with response metadata."
           (when-let* ((reasoning (plist-get message :reasoning)) ;look for reasoning blocks
                       ((and (stringp reasoning) (not (string-empty-p reasoning)))))
             (plist-put info :reasoning reasoning))
-          content))))
+          content)))))
 
 (cl-defmethod gptel--request-data ((backend gptel-openai) prompts)
   "JSON encode PROMPTS for sending to ChatGPT."
