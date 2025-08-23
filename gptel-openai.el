@@ -280,11 +280,39 @@ Mutate state INFO with response metadata."
        (plist-put call-spec :id (plist-get tool-call :id))
        collect call-spec into tool-use
        finally (plist-put info :tool-use tool-use)))
-    (when (and content (not (or (eq content :null) (string-empty-p content))))
-      (when-let* ((reasoning (plist-get message :reasoning)) ;look for reasoning blocks
-                  ((and (stringp reasoning) (not (string-empty-p reasoning)))))
-        (plist-put info :reasoning reasoning))
-      content)))
+    (when (and content (not (eq content :null)))
+      ;; Handle reasoning models where content is an array of objects
+      (if (arrayp content)
+          (let ((text-content "")
+                (reasoning-content ""))
+            ;; Extract text and reasoning from content array
+            (cl-loop for item across content do
+              (pcase (plist-get item :type)
+                ("text"
+                 (when-let* ((text (plist-get item :text))
+                             ((stringp text)))
+                   (setq text-content (concat text-content text))))
+                ("thinking"
+                 (when-let* ((thinking (plist-get item :thinking)))
+                   ;; Thinking content is typically an array of text objects
+                   (cl-loop for think-item across thinking do
+                     (when (equal (plist-get think-item :type) "text")
+                       (when-let* ((text (plist-get think-item :text))
+                                   ((stringp text)))
+                         (setq reasoning-content (concat reasoning-content text)))))))))
+            ;; Store reasoning content if present
+            (when (and (stringp reasoning-content) (not (string-empty-p reasoning-content)))
+              (plist-put info :reasoning reasoning-content))
+            ;; Return text content if present
+            (if (and (stringp text-content) (not (string-empty-p text-content)))
+                text-content
+              nil))
+        ;; Handle regular string content
+        (when (not (string-empty-p content))
+          (when-let* ((reasoning (plist-get message :reasoning)) ;look for reasoning blocks
+                      ((and (stringp reasoning) (not (string-empty-p reasoning)))))
+            (plist-put info :reasoning reasoning))
+          content))))
 
 (cl-defmethod gptel--request-data ((backend gptel-openai) prompts)
   "JSON encode PROMPTS for sending to ChatGPT."
